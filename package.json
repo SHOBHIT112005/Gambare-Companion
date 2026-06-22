@@ -1,0 +1,84 @@
+{
+  "name": "ganbare-companion",
+  "displayName": "Ganbare Companion",
+  "description": "An interactive 2D anime companion that encourages you in Japanese when coding gets tough!",
+  "version": "0.1.0",
+  "publisher": "ganbare",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:ganbareCompanion.characterView"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ganbareCompanion",
+          "title": "Ganbare Companion",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "ganbareCompanion": [
+        {
+          "id": "ganbareCompanion.characterView",
+          "name": "Companion",
+          "type": "webview"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Ganbare Companion",
+      "properties": {
+        "ganbareCompanion.idleTimeoutMinutes": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 60,
+          "description": "Minutes of inactivity before the companion encourages you."
+        },
+        "ganbareCompanion.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable the Ganbare Companion."
+        },
+        "ganbareCompanion.voiceEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable Japanese voice lines."
+        },
+        "ganbareCompanion.voicePitch": {
+          "type": "number",
+          "default": 1.3,
+          "minimum": 0.5,
+          "maximum": 2.0,
+          "description": "Pitch of the companion's voice (higher = cuter)."
+        },
+        "ganbareCompanion.voiceRate": {
+          "type": "number",
+          "default": 0.9,
+          "minimum": 0.5,
+          "maximum": 1.5,
+          "description": "Speed of the companion's voice."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}
