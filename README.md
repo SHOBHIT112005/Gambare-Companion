@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="media/gambare_companion.png" alt="Ganbare Companion Logo" width="300" />
+  <img src="media/gambare_companion.png" alt="Gambare Companion Logo" width="300" />
   
-  # Ganbare Companion
+  # Gambare Companion
   **Your AI Coding Partner — An Interactive Live2D Anime Assistant for VS Code**
 
   [![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-blue.svg)](https://marketplace.visualstudio.com/)
@@ -10,7 +10,7 @@
 
 ## Overview
 
-**Ganbare Companion** brings a fully animated, emotionally expressive Live2D anime companion right into your VS Code workspace. "Ganbare" (がんばれ) means "Do your best!" in Japanese, and that's exactly what this extension is designed to help you do!
+**Gambare Companion** brings a fully animated, emotionally expressive Live2D anime companion right into your VS Code workspace. "Gambare" (がんばれ) means "Do your best!" in Japanese, and that's exactly what this extension is designed to help you do!
 
 Whether you're debugging a stubborn error, staring blankly at a screen for too long, or finally fixing a broken build, your companion reacts to your coding state in real-time with **Voicevox-powered audio**, fully lip-synced Live2D animations, and bilingual speech bubbles.
 
@@ -28,19 +28,19 @@ Whether you're debugging a stubborn error, staring blankly at a screen for too l
 
 ## 🚀 Getting Started
 
-1. Install **Ganbare Companion** from the VS Code Marketplace.
+1. Install **Gambare Companion** from the VS Code Marketplace.
 2. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`).
-3. Type `Ganbare: Focus Companion` to open her in the bottom panel, or simply click the **Ganbare** icon in your Activity Bar (sidebar).
+3. Type `Gambare: Focus Companion` to open her in the bottom panel, or simply click the **Gambare** icon in your Activity Bar (sidebar).
 4. Start coding! Watch her react as you write and fix code.
 
 ## ⚙️ Configuration
 
 You can customize the companion's behavior in your VS Code Settings (`Ctrl+,`):
 
-*   `ganbareCompanion.enabled`: Enable or disable the companion entirely. (Default: `true`)
-*   `ganbareCompanion.voiceEnabled`: Enable or disable the Voicevox spoken audio. (Default: `true`)
-*   `ganbareCompanion.voicePitch`: Adjust the pitch of the companion's voice. (Default: `1.3`)
-*   `ganbareCompanion.voiceRate`: Adjust the speed of the companion's voice. (Default: `0.75`)
+*   `GambareCompanion.enabled`: Enable or disable the companion entirely. (Default: `true`)
+*   `GambareCompanion.voiceEnabled`: Enable or disable the Voicevox spoken audio. (Default: `true`)
+*   `GambareCompanion.voicePitch`: Adjust the pitch of the companion's voice. (Default: `1.3`)
+*   `GambareCompanion.voiceRate`: Adjust the speed of the companion's voice. (Default: `0.75`)
 
 ## 🛠️ Technology Stack
 
