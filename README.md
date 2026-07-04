@@ -1,7 +1,7 @@
 <div align="center">
   <img src="media/gambare_companion.png" alt="Ganbare Companion Logo" width="300" />
   
-  # Ganbare Companion
+  # Gambare Companion
   **Your AI Coding Partner — An Interactive Live2D Anime Assistant for VS Code**
 
   [![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-blue.svg)](https://marketplace.visualstudio.com/)
