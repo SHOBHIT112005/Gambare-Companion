@@ -10,7 +10,7 @@
 
 ## Overview
 
-**Ganbare Companion** brings a fully animated, emotionally expressive Live2D anime companion right into your VS Code workspace. "Ganbare" (がんばれ) means "Do your best!" in Japanese, and that's exactly what this extension is designed to help you do!
+**Gambare Companion** brings a fully animated, emotionally expressive Live2D anime companion right into your VS Code workspace. "Ganbare" (がんばれ) means "Do your best!" in Japanese, and that's exactly what this extension is designed to help you do!
 
 Whether you're debugging a stubborn error, staring blankly at a screen for too long, or finally fixing a broken build, your companion reacts to your coding state in real-time with **Voicevox-powered audio**, fully lip-synced Live2D animations, and bilingual speech bubbles.
 
