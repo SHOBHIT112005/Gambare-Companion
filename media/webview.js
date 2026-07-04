@@ -1,17 +1,15 @@
 /**
  * webview.js — Ganbare Companion Frontend Controller
  * 
- * Manages character image state transitions, speech bubble display,
- * and Japanese TTS via Web Speech API.
- * 
- * Runs inside the VS Code webview context.
+ * Manages Live2D WebGL animations (Shizuku), speech bubble display,
+ * and state transitions. Runs inside the VS Code webview context.
  */
 
 (function () {
     'use strict';
 
     // ═══ VS Code API ═══
-    // @ts-ignore — acquireVsCodeApi is injected by VS Code
+    // @ts-ignore
     const vscode = acquireVsCodeApi();
 
     // ═══ DOM References ═══
@@ -20,105 +18,186 @@
     const speechJapanese = document.getElementById('speech-japanese');
     const speechEnglish = document.getElementById('speech-english');
     const statusText = document.getElementById('status-text');
-    const characterWrapper = document.getElementById('character-wrapper');
+    const canvas = document.getElementById('spine-canvas'); // reusing canvas ID
 
-    // Character images
-    const imgIdle = document.getElementById('img-idle');
-    const imgWorried = document.getElementById('img-worried');
-    const imgHappy = document.getElementById('img-happy');
-    const imgEncouraging = document.getElementById('img-encouraging');
+    // ═══════════════════════════════════════════════════════════════════
+    // LIVE2D WEBGL SETUP
+    // ═══════════════════════════════════════════════════════════════════
+    
+    let live2dCharacter = null;
+    let app = new PIXI.Application({
+        view: canvas,
+        width: 300,
+        height: 400,
+        backgroundAlpha: 0,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true
+    });
 
-    const imageMap = {
-        idle: imgIdle,
-        worried: imgWorried,
-        happy: imgHappy,
-        encouraging: imgEncouraging
+    // Map companion states to Shizuku's native motion groups
+    // Shizuku motions: idle, tap_body, pinch_in, pinch_out, shake, flick_head
+    const ANIMATION_MAP = {
+        idle: 'idle',
+        worried: 'tap_body',      // nervous fidgeting
+        happy: 'flick_head',      // happy nodding/bouncing
+        encouraging: 'pinch_out', // leaning in
+        excited: 'flick_head',    // excited bouncing
+        shy: 'pinch_in',          // shy recoil
+        embarrassed: 'tap_body',  // embarrassed fidgeting
+        sad: 'shake'              // shaking head sadly
     };
+
+    async function loadLive2DModel() {
+        if (!window.LIVE2D_MODEL_URI) {
+            console.error('[Ganbare] No LIVE2D_MODEL_URI provided.');
+            return;
+        }
+
+        // Network interceptors to fix VS Code Webview URI mangling silently
+        const originalFetch = window.fetch;
+        window.fetch = async function(...args) {
+            if (typeof args[0] === 'string' && args[0].includes('https://file/%2B')) {
+                args[0] = args[0].replace('https://file/%2B', 'https://file%2B');
+            }
+            return originalFetch.apply(this, args);
+        };
+
+        const originalXHR = window.XMLHttpRequest.prototype.open;
+        window.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+            if (typeof url === 'string' && url.includes('https://file/%2B')) {
+                url = url.replace('https://file/%2B', 'https://file%2B');
+            }
+            originalXHR.call(this, method, url, ...rest);
+        };
+
+        const originalImageSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+        Object.defineProperty(HTMLImageElement.prototype, 'src', {
+            set: function(val) {
+                if (typeof val === 'string' && val.includes('https://file/%2B')) {
+                    val = val.replace('https://file/%2B', 'https://file%2B');
+                }
+                originalImageSrc.set.call(this, val);
+            },
+            get: function() {
+                return originalImageSrc.get.call(this);
+            }
+        });
+
+        try {
+            live2dCharacter = await PIXI.live2d.Live2DModel.from(window.LIVE2D_MODEL_URI);
+            
+            // Fit character to canvas nicely
+            const baseWidth = live2dCharacter.width / live2dCharacter.scale.x;
+            const baseHeight = live2dCharacter.height / live2dCharacter.scale.y;
+            
+            const scaleX = app.screen.width / baseWidth;
+            const scaleY = app.screen.height / baseHeight;
+            const scale = Math.min(scaleX, scaleY) * 1.4; 
+            
+            live2dCharacter.scale.set(scale);
+            
+            // Center horizontally, align to bottom vertically
+            // (live2dCharacter.width already includes the scale, so we don't multiply by scale again!)
+            live2dCharacter.x = (app.screen.width - live2dCharacter.width) / 2;
+            live2dCharacter.y = app.screen.height - live2dCharacter.height + 60;
+
+            app.stage.addChild(live2dCharacter);
+            
+            playLive2DAnimation('idle');
+            console.log('[Ganbare] Live2D Shizuku loaded successfully!');
+            
+            // Handle Interaction
+            live2dCharacter.on('hit', hitAreas => {
+                if (hitAreas.includes('head')) {
+                    playLive2DAnimation('happy'); // Petting head
+                } else {
+                    playLive2DAnimation('shy');
+                }
+            });
+        } catch (e) {
+            console.error('Failed to load Live2D model:', e);
+        }
+    }
+
+    let currentAnimLoop = null;
+
+    async function playLive2DAnimation(state) {
+        if (!live2dCharacter) return;
+        
+        if (currentAnimLoop) {
+            clearTimeout(currentAnimLoop);
+            currentAnimLoop = null;
+        }
+
+        const animName = ANIMATION_MAP[state] || 'idle';
+        
+        // Delay playing the animation to match OS-level PowerShell audio startup time (~600ms).
+        // IDLE and SAD states don't have spoken audio, so they trigger instantly.
+        const isVoiceState = state !== STATES.IDLE && state !== STATES.SAD;
+        const delay = isVoiceState ? 600 : 0;
+        
+        setTimeout(async () => {
+            const playLoop = async () => {
+                if (currentState !== state) return; // Stop if state changed
+                
+                await live2dCharacter.motion(animName);
+                
+                // If we are still in a non-idle state, loop the animation so it doesn't just stop!
+                if (currentState === state && state !== STATES.IDLE) {
+                    currentAnimLoop = setTimeout(playLoop, 300);
+                }
+            };
+            playLoop();
+        }, delay);
+    }
 
     // ═══════════════════════════════════════════════════════════════════
     // STATE MACHINE
     // ═══════════════════════════════════════════════════════════════════
 
-    const STATES = {
-        IDLE: 'idle',
-        WORRIED: 'worried',
-        HAPPY: 'happy',
-        ENCOURAGING: 'encouraging'
+    var STATES = {
+        IDLE: 'idle', WORRIED: 'worried', HAPPY: 'happy',
+        ENCOURAGING: 'encouraging', EXCITED: 'excited',
+        SHY: 'shy', EMBARRASSED: 'embarrassed', SAD: 'sad'
     };
 
-    /** How long non-idle states last before returning to idle (ms) */
-    const STATE_DURATIONS = {
-        worried: 10000,
-        happy: 8000,
-        encouraging: 12000
+    var STATE_DURATIONS = {
+        worried: 10000, happy: 8000, encouraging: 12000,
+        excited: 10000, shy: 8000, embarrassed: 7000, sad: 14000
     };
 
-    const STATUS_MESSAGES = {
-        idle: 'Standing by... ♡',
-        worried: 'Oh no, an error!',
-        happy: 'Yay! All fixed! ✨',
-        encouraging: 'You can do it! 💪'
+    var STATUS_MESSAGES = {
+        idle: 'Standing by... ♡', worried: 'Oh no, an error!',
+        happy: 'Yay! All fixed! ✨', encouraging: 'You can do it! 💪',
+        excited: 'AMAZING!! ✨🎉✨', shy: 'E-ehehe... ♡',
+        embarrassed: 'D-don\'t look! 💦', sad: 'I miss you... 🥺'
     };
 
-    let currentState = STATES.IDLE;
-    let stateTimer = null;
-    let bubbleTimer = null;
+    var currentState = STATES.IDLE;
+    var stateTimer = null;
+    var bubbleTimer = null;
 
-    /**
-     * Switch the visible character image to match the new state.
-     */
-    function switchCharacterImage(state) {
-        // Hide all images
-        Object.values(imageMap).forEach(function (img) {
-            if (img) { img.classList.remove('active'); }
-        });
-        // Show the image for this state
-        var target = imageMap[state];
-        if (target) {
-            target.classList.add('active');
-        }
-    }
-
-    /**
-     * Transition the character to a new state.
-     */
-    function transitionTo(newState, phrase, voiceSettings) {
-        // Clear any existing timers
+    function transitionTo(newState, phrase) {
         if (stateTimer) { clearTimeout(stateTimer); stateTimer = null; }
         if (bubbleTimer) { clearTimeout(bubbleTimer); bubbleTimer = null; }
 
         currentState = newState;
-
-        // Update CSS state class on the container (drives animations)
         container.className = 'state-' + newState;
-
-        // Switch the character image
-        switchCharacterImage(newState);
-
-        // Update status bar text
+        
+        playLive2DAnimation(newState);
         statusText.textContent = STATUS_MESSAGES[newState] || 'Standing by...';
 
-        // Show speech bubble with phrase
         if (phrase) {
             showSpeechBubble(phrase.japanese, phrase.english);
-
-            // Speak the phrase
-            if (voiceSettings && voiceSettings.voiceEnabled) {
-                speak(phrase.japanese, voiceSettings);
-            }
         }
 
-        // Auto-return to idle after duration
         if (newState !== STATES.IDLE) {
             var duration = STATE_DURATIONS[newState] || 8000;
             stateTimer = setTimeout(function () {
-                transitionTo(STATES.IDLE, null, null);
+                transitionTo(STATES.IDLE, null);
             }, duration);
 
-            // Hide bubble slightly before returning to idle
-            bubbleTimer = setTimeout(function () {
-                hideSpeechBubble();
-            }, duration - 1500);
+            bubbleTimer = setTimeout(hideSpeechBubble, duration - 1500);
         }
     }
 
@@ -129,10 +208,7 @@
     function showSpeechBubble(japanese, english) {
         speechJapanese.textContent = japanese || '';
         speechEnglish.textContent = english || '';
-
-        speechBubble.classList.remove('hidden');
-        speechBubble.classList.remove('animate-in');
-        // Force reflow to restart animation
+        speechBubble.classList.remove('hidden', 'animate-in');
         void speechBubble.offsetWidth;
         speechBubble.classList.add('animate-in');
     }
@@ -143,203 +219,54 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // SPEECH SYNTHESIS (TTS) ENGINE
-    // ═══════════════════════════════════════════════════════════════════
-
-    var speechSynth = null;
-    var japaneseVoice = null;
-    var voicesReady = false;
-
-    /**
-     * Initialize the speech synthesis engine.
-     */
-    function initSpeech() {
-        try {
-            if (typeof window.speechSynthesis === 'undefined') {
-                console.log('[Ganbare] SpeechSynthesis API not available');
-                return;
-            }
-
-            speechSynth = window.speechSynthesis;
-
-            // Try loading voices (may be available synchronously)
-            loadVoices();
-
-            // Also wait for the async voiceschanged event
-            if (speechSynth.onvoiceschanged !== undefined) {
-                speechSynth.addEventListener('voiceschanged', loadVoices);
-            }
-
-            // Fallback: try again after a short delay (some browsers need this)
-            setTimeout(loadVoices, 500);
-            setTimeout(loadVoices, 2000);
-
-            console.log('[Ganbare] Speech synthesis initialized');
-        } catch (e) {
-            console.log('[Ganbare] Speech synthesis init error:', e);
-        }
-    }
-
-    /**
-     * Load available voices and find a Japanese one.
-     */
-    function loadVoices() {
-        if (!speechSynth) { return; }
-
-        try {
-            var voices = speechSynth.getVoices();
-            if (!voices || voices.length === 0) { return; }
-
-            voicesReady = true;
-
-            // Priority: Microsoft Nanami (Windows) > Google Japanese > any ja-JP
-            japaneseVoice =
-                voices.find(function (v) { return v.name.indexOf('Nanami') !== -1; }) ||
-                voices.find(function (v) { return v.name.indexOf('Haruka') !== -1; }) ||
-                voices.find(function (v) { return v.name.indexOf('Ayumi') !== -1; }) ||
-                voices.find(function (v) { return v.name.indexOf('Google') !== -1 && v.lang.indexOf('ja') === 0; }) ||
-                voices.find(function (v) { return v.lang === 'ja-JP'; }) ||
-                voices.find(function (v) { return v.lang.indexOf('ja') === 0; }) ||
-                null;
-
-            if (japaneseVoice) {
-                console.log('[Ganbare] Found Japanese voice:', japaneseVoice.name, '(' + japaneseVoice.lang + ')');
-            } else {
-                console.log('[Ganbare] No Japanese voice found. Voices available:',
-                    voices.length, '—', voices.slice(0, 5).map(function (v) { return v.name + ' (' + v.lang + ')'; }).join(', '));
-            }
-        } catch (e) {
-            console.log('[Ganbare] Voice loading error:', e);
-        }
-    }
-
-    /**
-     * Speak a Japanese text string using the Web Speech API.
-     */
-    function speak(text, settings) {
-        if (!speechSynth || !text) { return; }
-
-        try {
-            // Cancel any ongoing speech
-            speechSynth.cancel();
-
-            var utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'ja-JP';
-
-            if (japaneseVoice) {
-                utterance.voice = japaneseVoice;
-            }
-
-            // Apply voice settings
-            utterance.pitch = (settings && settings.voicePitch) || 1.3;
-            utterance.rate = (settings && settings.voiceRate) || 0.9;
-            utterance.volume = 0.85;
-
-            utterance.onerror = function (event) {
-                console.log('[Ganbare] Speech error:', event.error);
-            };
-
-            utterance.onend = function () {
-                console.log('[Ganbare] Speech finished');
-            };
-
-            // Workaround: Chrome/Electron sometimes pauses long utterances
-            // Resume periodically to prevent pausing
-            var resumeInterval = setInterval(function () {
-                if (speechSynth && speechSynth.speaking) {
-                    speechSynth.resume();
-                } else {
-                    clearInterval(resumeInterval);
-                }
-            }, 5000);
-
-            speechSynth.speak(utterance);
-            console.log('[Ganbare] Speaking:', text);
-        } catch (e) {
-            console.log('[Ganbare] Speak error:', e);
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // MESSAGE HANDLER (from extension host)
+    // MESSAGE HANDLER
     // ═══════════════════════════════════════════════════════════════════
 
     window.addEventListener('message', function (event) {
         var message = event.data;
-        if (!message || !message.type) { return; }
-
-        var voiceSettings = {
-            voiceEnabled: message.voiceEnabled !== undefined ? message.voiceEnabled : true,
-            voicePitch: message.voicePitch || 1.3,
-            voiceRate: message.voiceRate || 0.9
-        };
+        if (!message || !message.type) return;
 
         switch (message.type) {
-            case 'TRIGGER_ERROR':
-                transitionTo(STATES.WORRIED, message.phrase, voiceSettings);
-                break;
-
-            case 'TRIGGER_STUCK':
-                transitionTo(STATES.ENCOURAGING, message.phrase, voiceSettings);
-                break;
-
-            case 'TRIGGER_FIXED':
-                transitionTo(STATES.HAPPY, message.phrase, voiceSettings);
-                break;
-
+            case 'TRIGGER_ERROR': transitionTo(STATES.WORRIED, message.phrase); break;
+            case 'TRIGGER_STUCK': transitionTo(STATES.ENCOURAGING, message.phrase); break;
+            case 'TRIGGER_FIXED': transitionTo(STATES.HAPPY, message.phrase); break;
+            case 'TRIGGER_EXCITED': transitionTo(STATES.EXCITED, message.phrase); break;
+            case 'TRIGGER_SHY': transitionTo(STATES.SHY, message.phrase); break;
+            case 'TRIGGER_EMBARRASSED': transitionTo(STATES.EMBARRASSED, message.phrase); break;
+            case 'TRIGGER_SAD': transitionTo(STATES.SAD, message.phrase); break;
             case 'TRIGGER_IDLE':
-                // For idle triggers with a phrase (like greetings), show it briefly
                 if (message.phrase) {
                     showSpeechBubble(message.phrase.japanese, message.phrase.english);
-                    if (voiceSettings.voiceEnabled) {
-                        speak(message.phrase.japanese, voiceSettings);
-                    }
                     bubbleTimer = setTimeout(hideSpeechBubble, 6000);
                 }
                 break;
-
-            default:
-                console.log('[Ganbare] Unknown message type:', message.type);
         }
     });
 
     // ═══════════════════════════════════════════════════════════════════
-    // CHARACTER CLICK INTERACTION
+    // INTERACTION
     // ═══════════════════════════════════════════════════════════════════
 
-    if (characterWrapper) {
-        characterWrapper.addEventListener('click', function () {
-            if (currentState === STATES.IDLE) {
-                // Ask the extension host for a random greeting
-                vscode.postMessage({ command: 'ready' });
-            }
-        });
-    }
+    canvas.addEventListener('click', function () {
+        if (currentState === STATES.IDLE) {
+            vscode.postMessage({ command: 'click' });
+        }
+    });
 
     // ═══════════════════════════════════════════════════════════════════
     // INITIALIZATION
     // ═══════════════════════════════════════════════════════════════════
 
     function init() {
-        // Initialize speech synthesis
-        initSpeech();
-
-        // Start in idle state
         container.className = 'state-idle';
-        switchCharacterImage('idle');
         hideSpeechBubble();
-
-        // Notify the extension host that the webview is ready
+        loadLive2DModel();
         vscode.postMessage({ command: 'ready' });
-
-        console.log('[Ganbare] Webview initialized!');
     }
 
-    // Run initialization
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
     }
-
 })();

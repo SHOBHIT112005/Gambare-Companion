@@ -2,7 +2,7 @@
  * webview.css — Ganbare Companion Webview Styles
  * 
  * Theme-aware styling using VS Code CSS variables.
- * Image-based character with state animations and speech bubble.
+ * Spine 2D WebGL Character Canvas and Speech Bubble.
  */
 
 /* ═══ BASE RESET & LAYOUT ═══ */
@@ -109,38 +109,21 @@ body {
 
 #character-wrapper {
     position: relative;
-    width: 220px;
-    height: 260px;
+    width: 300px;
+    height: 400px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: filter 0.3s ease;
+    border-radius: 16px;
+    overflow: hidden;
 }
 
-#character-wrapper:hover {
-    filter: brightness(1.08) drop-shadow(0 0 12px rgba(138, 100, 220, 0.3));
-}
-
-/* ═══ CHARACTER IMAGES ═══ */
-
-.character-img {
-    position: absolute;
-    top: 0;
-    left: 0;
+#spine-canvas {
     width: 100%;
     height: 100%;
-    object-fit: contain;
-    opacity: 0;
-    transform: scale(0.95);
-    transition: opacity 0.5s ease, transform 0.5s ease;
-    pointer-events: none;
-}
-
-.character-img.active {
-    opacity: 1;
-    transform: scale(1);
-    pointer-events: auto;
+    outline: none;
 }
 
 /* ═══ STATUS BAR ═══ */
@@ -185,43 +168,8 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   ANIMATIONS
+   ANIMATIONS (UI only, character is handled by Spine)
    ═══════════════════════════════════════════════════════════════════════════ */
-
-/* ─── Idle Float (gentle breathing motion) ─── */
-@keyframes idle-float {
-    0%, 100% { transform: translateY(0); }
-    50%      { transform: translateY(-6px); }
-}
-
-/* ─── Worried Shake ─── */
-@keyframes worried-shake {
-    0%, 100% { transform: translateX(0) rotate(0deg); }
-    10%      { transform: translateX(-3px) rotate(-1deg); }
-    20%      { transform: translateX(3px) rotate(1deg); }
-    30%      { transform: translateX(-3px) rotate(-0.5deg); }
-    40%      { transform: translateX(3px) rotate(0.5deg); }
-    50%      { transform: translateX(-2px) rotate(0deg); }
-    60%      { transform: translateX(2px) rotate(0deg); }
-    70%, 100% { transform: translateX(0); }
-}
-
-/* ─── Happy Bounce ─── */
-@keyframes happy-bounce {
-    0%, 100% { transform: translateY(0) scale(1); }
-    25%      { transform: translateY(-14px) scale(1.04); }
-    50%      { transform: translateY(0) scale(0.97); }
-    75%      { transform: translateY(-7px) scale(1.02); }
-}
-
-/* ─── Encouraging Pump ─── */
-@keyframes encouraging-pump {
-    0%, 100% { transform: translateY(0) scale(1); }
-    15%      { transform: translateY(-5px) scale(1.05); }
-    30%      { transform: translateY(0) scale(1); }
-    50%      { transform: translateY(-4px) scale(1.03); }
-    70%      { transform: translateY(0) scale(1); }
-}
 
 /* ─── Pulse Dot ─── */
 @keyframes pulse-dot {
@@ -236,29 +184,18 @@ body {
     100% { transform: translateY(0) scale(1); opacity: 1; }
 }
 
-/* ─── Glow pulse for character ─── */
-@keyframes glow-pulse {
-    0%, 100% { filter: drop-shadow(0 0 8px rgba(138, 100, 220, 0.2)); }
-    50%      { filter: drop-shadow(0 0 16px rgba(138, 100, 220, 0.4)); }
+#speech-bubble.animate-in {
+    animation: bubble-pop-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   STATE CLASSES — Applied to #companion-container
+   STATE CLASSES — Applied to #companion-container for UI coloring
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ─── IDLE STATE ─── */
-.state-idle #character-wrapper {
-    animation: idle-float 4s ease-in-out infinite;
-}
-.state-idle .character-img.active {
-    animation: glow-pulse 4s ease-in-out infinite;
-}
 .state-idle #status-dot { background: #4caf50; }
 
 /* ─── WORRIED STATE ─── */
-.state-worried #character-wrapper {
-    animation: worried-shake 0.6s ease-in-out 3;
-}
 .state-worried #status-dot { background: #ff9800; }
 .state-worried #speech-bubble {
     border-color: #ff9800;
@@ -266,12 +203,6 @@ body {
 }
 
 /* ─── HAPPY STATE ─── */
-.state-happy #character-wrapper {
-    animation: happy-bounce 0.8s ease-in-out 3;
-}
-.state-happy .character-img.active {
-    filter: drop-shadow(0 0 14px rgba(255, 105, 180, 0.35));
-}
 .state-happy #status-dot { background: #e91e90; }
 .state-happy #speech-bubble {
     border-color: #e91e90;
@@ -279,21 +210,38 @@ body {
 }
 
 /* ─── ENCOURAGING STATE ─── */
-.state-encouraging #character-wrapper {
-    animation: encouraging-pump 1.2s ease-in-out infinite;
-}
-.state-encouraging .character-img.active {
-    filter: drop-shadow(0 0 14px rgba(255, 102, 0, 0.3));
-}
 .state-encouraging #status-dot { background: #ff6600; }
 .state-encouraging #speech-bubble {
     border-color: #ff6600;
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), 0 0 20px rgba(255, 102, 0, 0.18);
 }
 
-/* ═══ SPEECH BUBBLE ANIMATION CLASS ═══ */
-#speech-bubble.animate-in {
-    animation: bubble-pop-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+/* ─── EXCITED STATE ─── */
+.state-excited #status-dot { background: #ffd700; }
+.state-excited #speech-bubble {
+    border-color: #ffd700;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), 0 0 24px rgba(255, 215, 0, 0.25);
+}
+
+/* ─── SHY STATE ─── */
+.state-shy #status-dot { background: #ffb6c1; }
+.state-shy #speech-bubble {
+    border-color: #ffb6c1;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), 0 0 20px rgba(255, 182, 193, 0.22);
+}
+
+/* ─── EMBARRASSED STATE ─── */
+.state-embarrassed #status-dot { background: #ff4444; }
+.state-embarrassed #speech-bubble {
+    border-color: #ff4444;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), 0 0 20px rgba(255, 68, 68, 0.2);
+}
+
+/* ─── SAD STATE ─── */
+.state-sad #status-dot { background: #6688aa; }
+.state-sad #speech-bubble {
+    border-color: #6688aa;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), 0 0 20px rgba(102, 136, 170, 0.18);
 }
 
 /* ═══ RESPONSIVE ═══ */

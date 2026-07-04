@@ -3,7 +3,12 @@
   "displayName": "Ganbare Companion",
   "description": "An interactive 2D anime companion that encourages you in Japanese when coding gets tough!",
   "version": "0.1.0",
-  "publisher": "ganbare",
+  "publisher": "Shobhit112005",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Shobhit112005/Gambare-Companion"
+  },
+  "icon": "media/gambare_companion.png",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -11,7 +16,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:ganbareCompanion.characterView"
+    "onView:ganbareCompanion.characterView",
+    "onView:ganbareCompanion.characterViewPanel"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -20,7 +26,14 @@
         {
           "id": "ganbareCompanion",
           "title": "Ganbare Companion",
-          "icon": "media/icon.svg"
+          "icon": "media/gambare_companion.png"
+        }
+      ],
+      "panel": [
+        {
+          "id": "ganbareCompanionPanel",
+          "title": "Ganbare Companion",
+          "icon": "media/gambare_companion.png"
         }
       ]
     },
@@ -31,14 +44,27 @@
           "name": "Companion",
           "type": "webview"
         }
+      ],
+      "ganbareCompanionPanel": [
+        {
+          "id": "ganbareCompanion.characterViewPanel",
+          "name": "Companion",
+          "type": "webview"
+        }
       ]
     },
+    "commands": [
+      {
+        "command": "ganbareCompanion.openInPanel",
+        "title": "Ganbare: Open Companion in Panel"
+      }
+    ],
     "configuration": {
       "title": "Ganbare Companion",
       "properties": {
         "ganbareCompanion.idleTimeoutMinutes": {
           "type": "number",
-          "default": 5,
+          "default": 2,
           "minimum": 1,
           "maximum": 60,
           "description": "Minutes of inactivity before the companion encourages you."
@@ -57,12 +83,12 @@
           "type": "number",
           "default": 1.3,
           "minimum": 0.5,
-          "maximum": 2.0,
+          "maximum": 2,
           "description": "Pitch of the companion's voice (higher = cuter)."
         },
         "ganbareCompanion.voiceRate": {
           "type": "number",
-          "default": 0.9,
+          "default": 0.75,
           "minimum": 0.5,
           "maximum": 1.5,
           "description": "Speed of the companion's voice."
@@ -77,8 +103,19 @@
     "lint": "eslint src --ext ts"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
     "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
     "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@pixi/core": "^6.5.10",
+    "@pixi/display": "^6.5.10",
+    "@pixi/loaders": "^6.5.10",
+    "@pixi/math": "^6.5.10",
+    "@pixi/sprite": "^6.5.10",
+    "@pixi/utils": "^6.5.10",
+    "pixi-live2d-display": "^0.4.0",
+    "pixi.js": "^8.19.0",
+    "sound-play": "^1.1.0"
   }
 }

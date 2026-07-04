@@ -1,13 +1,4 @@
 "use strict";
-/**
- * extension.ts — Ganbare Companion extension entry point
- *
- * Activates the extension by:
- * 1. Registering the GanbareViewProvider (webview)
- * 2. Setting up the DiagnosticWatcher (error detection)
- * 3. Setting up the IdleTracker (stuck/idle detection)
- * 4. Wiring all events to the webview via postMessage
- */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -50,7 +41,6 @@ const diagnosticWatcher_1 = require("./diagnosticWatcher");
 const idleTracker_1 = require("./idleTracker");
 function activate(context) {
     console.log('[Ganbare Companion] Extension activating...');
-    // ── 1. Create and register the WebviewViewProvider ──────────────────
     const provider = new GanbareViewProvider_1.GanbareViewProvider(context.extensionUri);
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(GanbareViewProvider_1.GanbareViewProvider.viewType, provider, {
         // Keep the webview content alive even when the view is hidden
@@ -58,7 +48,14 @@ function activate(context) {
             retainContextWhenHidden: true
         }
     }));
-    // ── 2. Set up Diagnostic Watcher (error detection) ──────────────────
+    context.subscriptions.push(vscode.window.registerWebviewViewProvider(GanbareViewProvider_1.GanbareViewProvider.panelViewType, provider, {
+        webviewOptions: {
+            retainContextWhenHidden: true
+        }
+    }));
+    context.subscriptions.push(vscode.commands.registerCommand('ganbareCompanion.openInPanel', () => {
+        vscode.commands.executeCommand('ganbareCompanion.characterViewPanel.focus');
+    }));
     const diagnosticWatcher = new diagnosticWatcher_1.DiagnosticWatcher((event) => {
         const config = vscode.workspace.getConfiguration('ganbareCompanion');
         if (!config.get('enabled', true)) {
@@ -70,20 +67,36 @@ function activate(context) {
         }
         else if (event.type === 'error_fixed') {
             console.log(`[Ganbare] All errors fixed in ${event.uri.fsPath}`);
-            provider.sendTrigger('TRIGGER_FIXED');
+            if (Math.random() < 0.35) {
+                provider.sendTrigger('TRIGGER_EXCITED');
+            }
+            else {
+                provider.sendTrigger('TRIGGER_FIXED');
+            }
         }
     });
     context.subscriptions.push(diagnosticWatcher);
-    // ── 3. Set up Idle Tracker (stuck/idle detection) ───────────────────
+    let idleFireCount = 0;
     const idleTracker = new idleTracker_1.IdleTracker(() => {
         const config = vscode.workspace.getConfiguration('ganbareCompanion');
         if (!config.get('enabled', true)) {
             return;
         }
-        console.log('[Ganbare] User appears to be stuck/idle');
-        provider.sendTrigger('TRIGGER_STUCK');
+        idleFireCount++;
+        if (idleFireCount >= 2) {
+            console.log('[Ganbare] User has been idle for a long time — sad mode');
+            provider.sendTrigger('TRIGGER_SAD');
+            idleFireCount = 0;
+        }
+        else {
+            console.log('[Ganbare] User appears to be stuck/idle');
+            provider.sendTrigger('TRIGGER_STUCK');
+        }
     });
     context.subscriptions.push(idleTracker);
+    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(() => {
+        idleFireCount = 0;
+    }));
     console.log('[Ganbare Companion] Extension activated successfully!');
 }
 function deactivate() {

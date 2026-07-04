@@ -4,6 +4,8 @@
  * Manages the webview lifecycle, generates the HTML content with
  * secure CSP, and provides methods for the extension host to
  * send messages to the webview frontend.
+ * 
+ * Supports multiple views (sidebar + panel) simultaneously.
  */
 
 import * as vscode from 'vscode';
@@ -13,16 +15,32 @@ import {
     errorPhrases,
     stuckPhrases,
     fixedPhrases,
-    idlePhrases
+    idlePhrases,
+    excitedPhrases,
+    shyPhrases,
+    embarrassedPhrases,
+    sadPhrases
 } from './phrases';
+import { playAudio } from './audioPlayer';
+import * as path from 'path';
 
-export type TriggerType = 'TRIGGER_ERROR' | 'TRIGGER_STUCK' | 'TRIGGER_FIXED' | 'TRIGGER_IDLE';
+export type TriggerType =
+    | 'TRIGGER_ERROR'
+    | 'TRIGGER_STUCK'
+    | 'TRIGGER_FIXED'
+    | 'TRIGGER_IDLE'
+    | 'TRIGGER_EXCITED'
+    | 'TRIGGER_SHY'
+    | 'TRIGGER_EMBARRASSED'
+    | 'TRIGGER_SAD';
 
 export interface TriggerMessage {
     type: TriggerType;
     phrase: Phrase;
     /** Optional context data (e.g., error message) */
     context?: string;
+    /** Resolved webview URI for the audio file */
+    audioUri?: string;
     /** Voice settings from configuration */
     voiceEnabled: boolean;
     voicePitch: number;
@@ -31,8 +49,10 @@ export interface TriggerMessage {
 
 export class GanbareViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'ganbareCompanion.characterView';
+    public static readonly panelViewType = 'ganbareCompanion.characterViewPanel';
 
-    private view?: vscode.WebviewView;
+    /** Track all active webview views (sidebar + panel) */
+    private views: vscode.WebviewView[] = [];
 
     constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -44,7 +64,8 @@ export class GanbareViewProvider implements vscode.WebviewViewProvider {
         _context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken
     ): void {
-        this.view = webviewView;
+        // Add to active views
+        this.views.push(webviewView);
 
         // Configure webview options
         webviewView.webview.options = {
@@ -62,13 +83,18 @@ export class GanbareViewProvider implements vscode.WebviewViewProvider {
             (message) => this.handleWebviewMessage(message),
             undefined
         );
+
+        // Remove the view from tracking when it's disposed
+        webviewView.onDidDispose(() => {
+            this.views = this.views.filter(v => v !== webviewView);
+        });
     }
 
     /**
-     * Send a trigger event to the webview with a random phrase.
+     * Send a trigger event to all active webviews with a random phrase.
      */
     public sendTrigger(type: TriggerType, context?: string): void {
-        if (!this.view) {
+        if (this.views.length === 0) {
             return;
         }
 
@@ -87,21 +113,52 @@ export class GanbareViewProvider implements vscode.WebviewViewProvider {
             case 'TRIGGER_IDLE':
                 phrase = getRandomPhrase(idlePhrases, 'idle');
                 break;
+            case 'TRIGGER_EXCITED':
+                phrase = getRandomPhrase(excitedPhrases, 'excited');
+                break;
+            case 'TRIGGER_SHY':
+                phrase = getRandomPhrase(shyPhrases, 'shy');
+                break;
+            case 'TRIGGER_EMBARRASSED':
+                phrase = getRandomPhrase(embarrassedPhrases, 'embarrassed');
+                break;
+            case 'TRIGGER_SAD':
+                phrase = getRandomPhrase(sadPhrases, 'sad');
+                break;
         }
 
         // Read voice settings from configuration
         const config = vscode.workspace.getConfiguration('ganbareCompanion');
+        const voiceEnabled = config.get<boolean>('voiceEnabled', true);
+
+        // Resolve audio URI if the phrase has an audio file
+        let audioUri: string | undefined;
+        if (phrase.audioFile && this.views.length > 0) {
+            audioUri = this.views[0].webview.asWebviewUri(
+                vscode.Uri.joinPath(this.extensionUri, 'media', 'voices', phrase.audioFile)
+            ).toString();
+            
+            // Play the audio via Node.js backend to bypass webview autoplay restrictions
+            if (voiceEnabled) {
+                const audioPath = path.join(this.extensionUri.fsPath, 'media', 'voices', phrase.audioFile);
+                playAudio(audioPath);
+            }
+        }
 
         const message: TriggerMessage = {
             type,
             phrase,
             context,
-            voiceEnabled: config.get<boolean>('voiceEnabled', true),
+            audioUri,
+            voiceEnabled,
             voicePitch: config.get<number>('voicePitch', 1.3),
-            voiceRate: config.get<number>('voiceRate', 0.9)
+            voiceRate: config.get<number>('voiceRate', 0.75)
         };
 
-        this.view.webview.postMessage(message);
+        // Broadcast to all active views
+        for (const view of this.views) {
+            view.webview.postMessage(message);
+        }
     }
 
     /**
@@ -113,6 +170,18 @@ export class GanbareViewProvider implements vscode.WebviewViewProvider {
                 // Webview has finished loading — send initial greeting
                 this.sendTrigger('TRIGGER_IDLE');
                 break;
+            case 'click': {
+                // Character was clicked — pick a random personality reaction
+                const roll = Math.random();
+                if (roll < 0.4) {
+                    this.sendTrigger('TRIGGER_SHY');
+                } else if (roll < 0.65) {
+                    this.sendTrigger('TRIGGER_EMBARRASSED');
+                } else {
+                    this.sendTrigger('TRIGGER_IDLE');
+                }
+                break;
+            }
             case 'log':
                 console.log('[Ganbare Webview]', message.text);
                 break;
@@ -132,19 +201,24 @@ export class GanbareViewProvider implements vscode.WebviewViewProvider {
             vscode.Uri.joinPath(this.extensionUri, 'media', 'webview.css')
         );
 
-        // Character image URIs for each state
-        const idleImg = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionUri, 'media', 'character_idle.png')
+        // Pixi & Spine libraries
+        const pixiUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionUri, 'media', 'libs', 'pixi.min.js')
         );
-        const worriedImg = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionUri, 'media', 'character_worried.png')
+        const unsafeEvalUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionUri, 'media', 'libs', 'unsafe-eval.js')
         );
-        const happyImg = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionUri, 'media', 'character_happy.png')
+        const live2dCoreUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionUri, 'media', 'libs', 'live2dcore.min.js')
         );
-        const encouragingImg = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionUri, 'media', 'character_encouraging.png')
+        const live2dUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionUri, 'media', 'libs', 'live2d.min.js')
         );
+
+        // Live2D model base URI (to pass to the webview JS)
+        const live2dModelUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionUri, 'media', 'shizuku', 'shizuku.model.json')
+        ).toString();
 
         // Generate a nonce for inline script security
         const nonce = getNonce();
@@ -154,7 +228,7 @@ export class GanbareViewProvider implements vscode.WebviewViewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data:; font-src ${webview.cspSource};">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data: blob:; media-src ${webview.cspSource}; font-src ${webview.cspSource}; connect-src ${webview.cspSource} blob:;">
     <link href="${styleUri}" rel="stylesheet">
     <title>Ganbare Companion</title>
 </head>
@@ -167,12 +241,9 @@ export class GanbareViewProvider implements vscode.WebviewViewProvider {
             <div class="bubble-tail"></div>
         </div>
 
-        <!-- Character Images (one per state, swap visibility) -->
+        <!-- WebGL Canvas for Live2D Character -->
         <div id="character-wrapper">
-            <img id="img-idle" class="character-img active" src="${idleImg}" alt="Companion - Idle" />
-            <img id="img-worried" class="character-img" src="${worriedImg}" alt="Companion - Worried" />
-            <img id="img-happy" class="character-img" src="${happyImg}" alt="Companion - Happy" />
-            <img id="img-encouraging" class="character-img" src="${encouragingImg}" alt="Companion - Encouraging" />
+            <canvas id="spine-canvas"></canvas>
         </div>
 
         <!-- Status indicator -->
@@ -182,6 +253,13 @@ export class GanbareViewProvider implements vscode.WebviewViewProvider {
         </div>
     </div>
 
+    <script nonce="${nonce}">
+        window.LIVE2D_MODEL_URI = "${live2dModelUri}";
+    </script>
+    <script nonce="${nonce}" src="${pixiUri}"></script>
+    <script nonce="${nonce}" src="${unsafeEvalUri}"></script>
+    <script nonce="${nonce}" src="${live2dCoreUri}"></script>
+    <script nonce="${nonce}" src="${live2dUri}"></script>
     <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
