@@ -2,7 +2,7 @@
   <img src="media/gambare_companion.png" alt="Gambare Companion Logo" width="300" />
   
   # Gambare Companion
-  **Your AI Coding Partner — An Interactive Live2D Anime Assistant for VS Code**
+  **Your Coding Partner — An Interactive Live2D Anime Assistant for VS Code**
 
   [![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-blue.svg)](https://marketplace.visualstudio.com/)
 

@@ -2,7 +2,7 @@
   "name": "gambare-companion-extension",
   "displayName": "Gambare Companion Extension",
   "description": "An interactive 2D anime companion that encourages you in Japanese when coding gets tough!",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "Shobhit112005",
   "repository": {
     "type": "git",
